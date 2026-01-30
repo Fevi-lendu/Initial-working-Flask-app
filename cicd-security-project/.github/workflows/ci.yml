@@ -1,46 +1,71 @@
-name: CI/CD Security Pipeline
+name: CI Pipeline
 
-on:
-  push:
-    branches: [ "main" ]
+on: [push]
 
 jobs:
   build-test-analyze:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
+      - name: Install Node dependencies
+        run: |
+          cd node-app
+          npm install
 
-    - name: Run app tests (basic)
-      run: |
-        python -c "import app"
+      - name: Node Tests
+        run: |
+          cd node-app
+          npm test
 
-    - name: SonarCloud Scan (Static Analysis)
-      uses: SonarSource/sonarcloud-github-action@master
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      with:
-        args: >
-          -Dsonar.projectKey=your_project_key
-          -Dsonar.organization=your_org
-          -Dsonar.sources=.
-         - name: Run Flask App
-      run: |
-        python app.py &
-        sleep 10
+      - name: ESLint Static Analysis
+        run: |
+          cd node-app
+          npm run lint
 
-    - name: OWASP ZAP Scan
-      uses: zaproxy/action-baseline@v0.9.0
-      with:
-        target: 'http://localhost:5000'
-     
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: |
+          cd python-app
+          pip install -r requirements.txt
+
+      - name: Python Tests
+        run: |
+          cd python-app
+          pytest
+
+      - name: Flake8 Static Analysis
+        run: |
+          cd python-app
+          flake8 .
+
+      - name: Run Node App
+        run: |
+          cd node-app
+          npm start &
+
+      - name: Run Python App
+        run: |
+          cd python-app
+          python app.py &
+
+      - name: OWASP ZAP Baseline Scan (Node)
+        uses: zaproxy/action-baseline@v0.11.0
+        with:
+          target: 'http://localhost:3000'
+
+      - name: OWASP ZAP Baseline Scan (Python)
+        uses: zaproxy/action-baseline@v0.11.0
+        with:
+          target: 'http://localhost:5000'
